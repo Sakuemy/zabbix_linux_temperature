@@ -1,5 +1,5 @@
-Должен быть установлен python3
-	sudo apt install python3
+Должен быть установлен python3 и smartmontools
+	sudo apt install python3 smartmontools
 
 sudo mkdir -p /opt/hardware-monitoring
 sudo nano /opt/hardware-monitoring/hwmon_read.py
