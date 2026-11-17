@@ -1,0 +1,101 @@
+zabbix_export:
+  version: '6.0'
+  groups:
+    - uuid: e28e2a09c10e4d0b9d7c7401352c54ae
+      name: Templates
+  templates:
+    - uuid: 06099b5292324e17b8843b886e6b3e70
+      template: 'Hwmon temperature'
+      name: 'Hwmon temperature'
+      description: 'Требует на узле UserParameter hwmon.read.json (скрипт hwmon.py)'
+      groups:
+        - name: Templates
+      items:
+        - uuid: 775da199afb44868b07a37353d1ae475
+          name: 'Get temperature metrics'
+          key: hwmon.read.json
+          delay: 1m
+          history: 90d
+          trends: '0'
+          value_type: TEXT
+          preprocessing:
+            - type: JSONPATH
+              parameters:
+                - $.sensors
+          tags:
+            - tag: component
+              value: temperature
+          triggers:
+            - uuid: 3ec51f04d99f4959976421a6876f0b2b
+              expression: 'nodata(/Hwmon temperature/hwmon.read.json,5m)=1'
+              name: 'Нет данных о температуре'
+              priority: WARNING
+      discovery_rules:
+        - uuid: 21b9e9b06d654ed5b57d52b95e6b4fef
+          name: 'Temperature sensors discovery'
+          type: DEPENDENT
+          key: hwmon.sensors.discovery
+          delay: '0'
+          lifetime: 7d
+          item_prototypes:
+            - uuid: 92ae58d9ba13407d987f35f426b95f8e
+              name: 'Temperature {#CHIP}: {#SENSOR}'
+              type: DEPENDENT
+              key: 'hwmon.temp[{#CHIP},{#SENSOR}]'
+              delay: '0'
+              history: 90d
+              trends: 365d
+              value_type: FLOAT
+              units: '°C'
+              preprocessing:
+                - type: JSONPATH
+                  parameters:
+                    - '$[?(@.chip==''{#CHIP}'' && @.sensor==''{#SENSOR}'')].temperature'
+                - type: REGEX
+                  parameters:
+                    - '\[(.*)\]'
+                    - \1
+              master_item:
+                key: hwmon.read.json
+              tags:
+                - tag: component
+                  value: temperature
+              trigger_prototypes:
+                - uuid: e846a67f3eab445295a18aa8563886bb
+                  expression: 'min(/Hwmon temperature/hwmon.temp[{#CHIP},{#SENSOR}],5m)>{#WARN}'
+                  recovery_mode: RECOVERY_EXPRESSION
+                  recovery_expression: 'max(/Hwmon temperature/hwmon.temp[{#CHIP},{#SENSOR}],5m)<{#WARN}-5'
+                  name: '{#CHIP}: {#SENSOR}: температура выше {#WARN}°C ({ITEM.LASTVALUE1})'
+                  opdata: '{ITEM.LASTVALUE1}'
+                  priority: WARNING
+                - uuid: e1d6836a15c54b868dcced320bbd9479
+                  expression: 'min(/Hwmon temperature/hwmon.temp[{#CHIP},{#SENSOR}],3m)>{#CRIT}'
+                  recovery_mode: RECOVERY_EXPRESSION
+                  recovery_expression: 'max(/Hwmon temperature/hwmon.temp[{#CHIP},{#SENSOR}],3m)<{#CRIT}-5'
+                  name: '{#CHIP}: {#SENSOR}: критическая температура {#CRIT}°C ({ITEM.LASTVALUE1})'
+                  opdata: '{ITEM.LASTVALUE1}'
+                  priority: HIGH
+                  dependencies:
+                    - name: '{#CHIP}: {#SENSOR}: температура выше {#WARN}°C ({ITEM.LASTVALUE1})'
+                      expression: 'min(/Hwmon temperature/hwmon.temp[{#CHIP},{#SENSOR}],5m)>{#WARN}'
+                      recovery_expression: 'max(/Hwmon temperature/hwmon.temp[{#CHIP},{#SENSOR}],5m)<{#WARN}-5'
+          graph_prototypes:
+            - uuid: 9dcf22e742ae46cb92db1f2df4703222
+              name: 'Температура {#CHIP}: {#SENSOR}'
+              ymin_type_1: FIXED
+              graph_items:
+                - color: 199C0D
+                  item:
+                    host: 'Hwmon temperature'
+                    key: 'hwmon.temp[{#CHIP},{#SENSOR}]'
+          master_item:
+            key: hwmon.read.json
+          lld_macro_paths:
+            - lld_macro: '{#CHIP}'
+              path: $.chip
+            - lld_macro: '{#CRIT}'
+              path: $.crit
+            - lld_macro: '{#SENSOR}'
+              path: $.sensor
+            - lld_macro: '{#WARN}'
+              path: $.warn
